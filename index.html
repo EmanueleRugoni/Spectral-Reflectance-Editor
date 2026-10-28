@@ -23,8 +23,8 @@
     font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   }
   h1 { font-size: 15px; text-align: center; margin: 4px 0 18px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-  .app { display: grid; grid-template-columns: minmax(280px, 390px) 1fr; gap: 20px; max-width: 1100px; margin: 0 auto; }
-  @media (max-width: 760px) { .app { grid-template-columns: 1fr; } }
+  .app { display: grid; grid-template-columns: minmax(300px, 24%) minmax(0, 1fr); gap: 20px; width: 100%; margin: 0; }
+  @media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } body { padding: 10px; } .panel { padding: 16px; } }
   .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: 24px; }
   .swatch { height: 150px; border-radius: 10px; border: 6px solid #181818; box-shadow: 0 4px 14px rgba(0,0,0,.5); transition: background .05s; }
   .readout { margin: 10px 2px 0; font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
@@ -56,7 +56,10 @@
   .check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
   .de + .de { margin-top: 6px; }
   .de small { color: var(--muted); }
-  .spectra { max-width: 1100px; margin: 20px auto 0; }
+  .spectra { width: 100%; margin: 20px 0 0; }
+  .legend { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
+  @media (max-width: 600px) { .chip-row > span { min-width: 100%; } .pair .swatch { height: 80px; } }
+  .copyright { text-align: center; color: var(--muted); font-size: 12px; margin: 24px 0 8px; }
   .spectra canvas { aspect-ratio: 2 / 1; }
   .chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
   .chip-row > span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; min-width: 120px; }
@@ -138,6 +141,8 @@
   <div class="legend" id="legend"></div>
   <p class="hint">Click the chips to overlay sources. x, y and CCT use the observer of the selected illuminant (-02 = 2&deg;, -10 = 10&deg;). Fluorescent and LED spectra are parametric approximations (phosphor bands + Hg lines) fitted to the nominal chromaticity of each source; D, A and Horizon are computed from the CIE definitions. Import a measured SPD (wavelength, power) to use exact data. &ldquo;SPL&rdquo; entries share the spectrum of their base source.</p>
 </section>
+
+<footer class="copyright">Copyright &copy; By E.R.</footer>
 
 <script>
 (() => {
@@ -566,7 +571,7 @@
   const spCv = $('spdPlot'), sc = spCv.getContext('2d');
   const SP = {l: 56, r: 16, t: 16, b: 48};
   const spW = () => spCv.width - SP.l - SP.r, spH = () => spCv.height - SP.t - SP.b;
-  let spSel = [baseKey('D65'), 'F11', 'LEDB3', 'A'], spHover = null, spCurves = [], spYmax = 1;
+  let spSel = [baseKey('D65')], spHover = null, spCurves = [], spYmax = 1;
   const spColor = i => `hsl(${(i * 67 + 205) % 360} 85% 62%)`;
   const spStrip = Array.from({length: 301}, (_, i) => xyzToRGB([xb(400 + i) * 90, yb(400 + i) * 90, zb(400 + i) * 90], true));
   const spX = l => SP.l + (l - 400) / 300 * spW(), spY = v => SP.t + (1 - v / spYmax) * spH();
