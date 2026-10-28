@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spectral Reflectance Editor</title>
+<style>
+  :root {
+    --bg: #2b2b2b;
+    --panel: #383838;
+    --panel-border: #4a4a4a;
+    --plot-bg: #1a1a1a;
+    --text: #f0f0f0;
+    --muted: #a8a8a8;
+    --btn: #4a4a4a;
+    --btn-hover: #5a5a5a;
+    --accent: #2f6bff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  }
+  h1 { font-size: 15px; text-align: center; margin: 4px 0 18px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .app { display: grid; grid-template-columns: minmax(280px, 390px) 1fr; gap: 20px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 760px) { .app { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: 24px; }
+  .swatch { height: 150px; border-radius: 10px; border: 6px solid #181818; box-shadow: 0 4px 14px rgba(0,0,0,.5); transition: background .05s; }
+  .readout { margin: 10px 2px 0; font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+  label { display: block; margin: 18px 0 6px; font-weight: 700; font-size: 14px; color: #c8c8c8; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  hr { border: 0; border-top: 1px solid var(--panel-border); margin: 22px 0; }
+  h2 { font-size: 17px; text-align: center; margin: 0 0 14px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button {
+    background: var(--btn); color: var(--text); border: 0; border-radius: 4px;
+    padding: 10px 6px; font: 700 13px inherit; font-family: inherit; cursor: pointer;
+  }
+  button:hover { background: var(--btn-hover); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .plot-title { text-align: center; font-size: 18px; font-weight: 700; margin: 0 0 18px; }
+  .plot-wrap { background: var(--plot-bg); border-radius: 10px; padding: 12px; }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; touch-action: none; cursor: crosshair; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; justify-content: center; }
+  .tools button { padding: 8px 14px; }
+  .hint { text-align: center; color: #777; font-size: 12px; margin: 14px 8px 0; }
+  select { background: var(--btn); color: var(--text); border: 0; border-radius: 4px; padding: 8px 10px; font: 600 13px inherit; font-family: inherit; width: 100%; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pair .swatch { height: 110px; }
+  .cap { font-size: 11px; color: var(--muted); text-align: center; margin-top: 6px; text-transform: uppercase; letter-spacing: .06em; }
+  .de { margin: 12px 0 0; padding: 8px 10px; border-radius: 6px; background: #2b2b2b; font: 13px ui-monospace, Consolas, monospace; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .de b { font-size: 16px; }
+  .refbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .drop canvas { outline: 2px dashed var(--accent); outline-offset: 4px; }
+  .check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  .de + .de { margin-top: 6px; }
+  .de small { color: var(--muted); }
+  .spectra { max-width: 1100px; margin: 20px auto 0; }
+  .spectra canvas { aspect-ratio: 2 / 1; }
+  .chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+  .chip-row > span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; min-width: 120px; }
+  .chip { padding: 5px 10px; font-size: 12px; background: #2f2f2f; border: 1px solid var(--panel-border); }
+  .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); }
+  .chip.cur { outline: 2px solid #fff; outline-offset: 1px; }
+  .spctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: center; margin: 12px 0 14px; }
+  .spctl select { width: auto; padding: 4px 8px; }
+  .spctl button { padding: 7px 12px; }
+  .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 14px; margin-top: 14px; font: 12px ui-monospace, Consolas, monospace; }
+  .lg { display: flex; align-items: center; gap: 8px; background: #2b2b2b; border-radius: 6px; padding: 6px 8px; }
+  .lg i { width: 14px; height: 4px; border-radius: 2px; flex: none; }
+  .lg b { min-width: 74px; }
+  .lg .val { min-width: 44px; text-align: right; color: #fff; }
+  .lg .xy { color: var(--muted); flex: 1; }
+  .lg button { padding: 3px 8px; font-size: 11px; }
+</style>
+</head>
+<body>
+<h1>Spectral Reflectance Editor</h1>
+<div class="app">
+  <section class="panel" aria-label="Colore">
+    <div class="pair">
+      <div><div class="swatch" id="refSwatch"></div><div class="cap">Reference</div></div>
+      <div><div class="swatch" id="swatch"></div><div class="cap">Current</div></div>
+    </div>
+    <div class="readout"><span id="hex">#------</span><span id="xyz">XYZ</span></div>
+    <div class="de"><span>&Delta;E*<sub>ab</sub> <small>(CIE76)</small></span><b id="deAb">0.00</b></div>
+    <div class="de"><span>&Delta;E<sub>CMC</sub> <small>(2:1)</small></span><b id="deCmc">0.00</b></div>
+    <div class="de"><span>&Delta;E<sub>00</sub> <b id="de">0.00</b></span><span id="deTxt"></span></div>
+    <div class="refbtns"><button id="setRef">Set reference</button><button id="useRef">Reference &rarr; curve</button></div>
+
+    <label for="illum">Illuminant</label>
+    <select id="illum"></select>
+
+    <label for="sL">L* (Lightness): <span id="vL"></span></label>
+    <input type="range" id="sL" min="0" max="100" step="1" value="50">
+    <label for="sa">a* (Green-Red): <span id="va"></span></label>
+    <input type="range" id="sa" min="-100" max="100" step="1" value="0">
+    <label for="sb">b* (Blue-Yellow): <span id="vb"></span></label>
+    <input type="range" id="sb" min="-100" max="100" step="1" value="0">
+
+    <hr>
+    <h2>Material Presets</h2>
+    <div class="btns" id="presets"></div>
+  </section>
+
+  <section class="panel" aria-label="Spettro">
+    <h2 class="plot-title">Spectral Reflectance (400nm - 700nm)</h2>
+    <div class="plot-wrap"><canvas id="plot" width="960" height="600"></canvas></div>
+    <div class="tools">
+      <button id="undo">Undo</button>
+      <button id="smooth">Smooth</button>
+      <button id="reset">Reset 50%</button>
+      <button id="csv">Export CSV</button>
+      <button id="import">Import CSV</button>
+      <input type="file" id="file" accept=".csv,.txt,.tsv" hidden>
+    </div>
+    <div class="tools">
+      <label class="check"><input type="checkbox" id="snap"> Snap 5%</label>
+      <label class="check"><input type="checkbox" id="spline" checked> Spline curve</label>
+      <label class="check">Step <select id="step" style="width:auto;padding:4px 8px"><option value="10">10 nm</option><option value="5">5 nm</option></select></label>
+    </div>
+    <p class="hint">Draw with the mouse (or finger) to modify the curve. You can also drop a CSV file (wavelength, reflectance) onto the chart. Note: blues near 400nm often appear slightly violet due to sRGB limitations.</p>
+  </section>
+</div>
+
+<section class="panel spectra" aria-label="Emission spectra">
+  <h2 class="plot-title">Illuminant Emission Spectra (400nm - 700nm)</h2>
+  <div id="chips"></div>
+  <div class="spctl">
+    <label class="check">Normalize <select id="spNorm"><option value="peak">peak = 1</option><option value="y560">560 nm = 1</option></select></label>
+    <button id="spCur">Show current illuminant only</button>
+    <button id="spClear">Clear</button>
+    <button id="spImport">Import SPD (CSV)</button>
+    <input type="file" id="spdFile" accept=".csv,.txt,.tsv" hidden>
+  </div>
+  <div class="plot-wrap"><canvas id="spdPlot" width="1200" height="600"></canvas></div>
+  <div class="legend" id="legend"></div>
+  <p class="hint">Click the chips to overlay sources. x, y and CCT use the observer of the selected illuminant (-02 = 2&deg;, -10 = 10&deg;). Fluorescent and LED spectra are parametric approximations (phosphor bands + Hg lines) fitted to the nominal chromaticity of each source; D, A and Horizon are computed from the CIE definitions. Import a measured SPD (wavelength, power) to use exact data. &ldquo;SPL&rdquo; entries share the spectrum of their base source.</p>
+</section>
+
+<script>
+(() => {
+  'use strict';
+  // ---------- Colorimetry (CIE 1931 2°, 400–700 nm, variable step) ----------
+  const planck = T => l => { const m = l * 1e-9; return 1 / (m ** 5 * (Math.exp(1.4388e-2 / (m * T)) - 1)); };
+  const g = (l, m, s1, s2) => { const t = (l - m) / (l < m ? s1 : s2); return Math.exp(-0.5 * t * t); };
+  // Wyman, Sloan & Shirley (2013) multi-lobe fit of the CIE 1931 CMFs (2 deg observer)
+  const xb = l => 1.056 * g(l,599.8,37.9,31.0) + 0.362 * g(l,442.0,16.0,26.7) - 0.065 * g(l,501.1,20.4,26.2);
+  const yb = l => 0.821 * g(l,568.8,46.9,40.5) + 0.286 * g(l,530.9,16.3,31.1);
+  const zb = l => 1.217 * g(l,437.0,11.8,36.0) + 0.681 * g(l,459.0,26.0,13.8);
+  const CMF2 = l => [xb(l), yb(l), zb(l)];
+  // CIE 1964 10 deg observer, 400-700 nm every 10 nm (Catmull-Rom interpolated)
+  const CMF10T = [
+    [0.019110,0.084736,0.204492,0.314679,0.383734,0.370702,0.302273,0.195618,0.080507,0.016172,0.003816,0.037465,0.117749,0.236491,0.376772,0.529826,0.705224,0.878655,1.014160,1.118520,1.123990,1.030480,0.856297,0.647467,0.431567,0.268329,0.152568,0.081261,0.040851,0.019941,0.009576],
+    [0.002004,0.008756,0.021391,0.038676,0.062077,0.089456,0.128201,0.185190,0.253589,0.339133,0.460777,0.606741,0.761757,0.875211,0.961988,0.991761,0.997340,0.955552,0.868934,0.777405,0.658341,0.527963,0.398057,0.283493,0.179828,0.107633,0.060281,0.031800,0.015905,0.007749,0.003718],
+    [0.086011,0.389366,0.972542,1.553480,1.967280,1.994800,1.745370,1.317560,0.772125,0.415254,0.218502,0.112044,0.060709,0.030451,0.013676,0.003988,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]];
+  const crom = (A, t) => {
+    t = Math.min(30, Math.max(0, t)); const i = Math.min(29, Math.floor(t)), u = t - i;
+    const p0 = A[Math.max(0, i - 1)], p1 = A[i], p2 = A[i + 1], p3 = A[Math.min(30, i + 2)];
+    return 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
+  };
+  const CMF10 = l => CMF10T.map(A => Math.max(0, crom(A, (l - 400) / 10)));
+  const cmfFor = o => o === '10' ? CMF10 : CMF2;
+
+  // ---------- Illuminant library ----------
+  // CIE daylight: S0 + M1*S1 + M2*S2 (eigenvector tables 400-700 nm, 10 nm)
+  const S0 = [94.8,104.8,105.9,96.8,113.9,125.6,125.5,121.3,121.3,113.5,113.1,110.8,106.5,108.8,105.3,104.4,100.0,96.0,95.1,89.1,90.5,90.3,88.4,84.0,85.1,81.9,82.6,84.9,81.3,71.9,74.3];
+  const S1 = [43.4,46.3,43.9,37.1,36.7,35.9,32.6,27.9,24.3,20.1,16.2,13.2,8.6,6.1,4.2,1.9,0,-1.6,-3.5,-3.5,-5.8,-7.2,-8.6,-9.5,-10.9,-10.7,-12.0,-14.0,-13.6,-12.0,-13.3];
+  const S2 = [-1.1,-0.5,-0.7,-1.2,-2.6,-2.9,-2.8,-2.6,-2.6,-1.8,-1.5,-1.3,-1.2,-1.0,-0.5,-0.3,0,0.2,0.5,2.1,3.2,4.1,4.7,5.1,6.7,7.3,8.6,9.8,10.2,8.3,9.6];
+  const daylight = T => {
+    const x = T <= 7000 ? 0.244063 + 0.09911e3 / T + 2.9678e6 / T ** 2 - 4.6070e9 / T ** 3 : 0.237040 + 0.24748e3 / T + 1.9018e6 / T ** 2 - 2.0064e9 / T ** 3;
+    const y = -3 * x * x + 2.870 * x - 0.275, M = 0.0241 + 0.2562 * x - 0.7341 * y;
+    const M1 = (-1.3515 - 1.7703 * x + 5.9114 * y) / M, M2 = (0.0300 - 31.4424 * x + 30.0717 * y) / M;
+    return l => {
+      const t = Math.min(30, Math.max(0, (l - 400) / 10)), i = Math.min(29, Math.floor(t)), u = t - i, a = A => A[i] + (A[i + 1] - A[i]) * u;
+      return a(S0) + M1 * a(S1) + M2 * a(S2);
+    };
+  };
+  // Fluorescent / LED: sum of gaussians [centre nm, sigma nm, height] (phosphor bands, Hg lines, LED dies),
+  // fitted so that the 2 deg chromaticity matches the nominal value of each source.
+  const COMPS = {"F1":[[465,35,0.7637],[540,40,0.2117],[590,48,0.5874],[405,1.5,0.07841],[436,1.5,0.1742],[546,1.5,0.1917],[578,1.5,0.09583]],"F2":[[465,35,0.487],[540,40,0.06672],[590,48,0.7864],[405,1.5,0.06932],[436,1.5,0.1541],[546,1.5,0.1695],[578,1.5,0.08473]],"F3":[[480,35,0.4703],[570,40,0.1878],[605,45,0.7908],[405,1.5,0.02106],[436,1.5,0.0468],[546,1.5,0.05148],[578,1.5,0.02574]],"F4":[[480,35,0.3632],[570,40,0.09214],[605,45,0.95],[405,1.5,0.01506],[436,1.5,0.03348],[546,1.5,0.03682],[578,1.5,0.01841]],"F5":[[465,35,0.7162],[540,40,0.2544],[590,48,0.5556],[405,1.5,0.07753],[436,1.5,0.1723],[546,1.5,0.1895],[578,1.5,0.09475]],"F6":[[465,35,0.4223],[540,40,0.1063],[590,48,0.7612],[405,1.5,0.06794],[436,1.5,0.151],[546,1.5,0.1661],[578,1.5,0.08303]],"F9":[[465,35,0.4954],[540,40,0.04094],[590,48,0.8098],[405,1.5,0.0693],[436,1.5,0.154],[546,1.5,0.1694],[578,1.5,0.0847]],"F7":[[450,22,0.3045],[490,45,0.3022],[590,50,0.3986],[405,1.5,0.06757],[436,1.5,0.1502],[546,1.5,0.1652],[578,1.5,0.08259]],"F8":[[450,22,0.2227],[490,45,0.2247],[590,50,0.4455],[405,1.5,0.06531],[436,1.5,0.1451],[546,1.5,0.1596],[578,1.5,0.07982]],"F10":[[450,21,0.1263],[543,3.5,0.8746],[487,3,0.08746],[585,3,0.08746],[620,3,0.06997],[611,3,0.591],[593,3,0.1182],[625,3,0.1477],[650,5,0.03546],[405,1.5,0.0551],[436,1.5,0.1224],[546,1.5,0.1347],[578,1.5,0.06735]],"F11":[[450,21,0.09643],[543,3.5,0.8252],[487,3,0.08252],[585,3,0.08252],[620,3,0.06602],[611,3,0.7076],[593,3,0.1415],[625,3,0.1769],[650,5,0.04246],[405,1.5,0.04884],[436,1.5,0.1085],[546,1.5,0.1194],[578,1.5,0.05969]],"F12":[[450,21,0.05499],[543,3.5,0.7505],[487,3,0.07505],[585,3,0.07505],[620,3,0.06004],[611,3,0.8823],[593,3,0.1765],[625,3,0.2206],[650,5,0.05294],[405,1.5,0.03939],[436,1.5,0.08752],[546,1.5,0.09627],[578,1.5,0.04814]],"TL84":[[450,21,0.09643],[543,3.5,0.8252],[487,3,0.08252],[585,3,0.08252],[620,3,0.06602],[611,3,0.7076],[593,3,0.1415],[625,3,0.1769],[650,5,0.04246],[405,1.5,0.04884],[436,1.5,0.1085],[546,1.5,0.1194],[578,1.5,0.05969]],"TL83":[[450,21,0.05499],[543,3.5,0.7505],[487,3,0.07505],[585,3,0.07505],[620,3,0.06004],[611,3,0.8823],[593,3,0.1765],[625,3,0.2206],[650,5,0.05294],[405,1.5,0.03939],[436,1.5,0.08752],[546,1.5,0.09627],[578,1.5,0.04814]],"U30":[[450,21,0.05499],[543,3.5,0.7505],[487,3,0.07505],[585,3,0.07505],[620,3,0.06004],[611,3,0.8823],[593,3,0.1765],[625,3,0.2206],[650,5,0.05294],[405,1.5,0.03939],[436,1.5,0.08752],[546,1.5,0.09627],[578,1.5,0.04814]],"U30X":[[450,21,0.05413],[543,3.5,0.741],[487,3,0.0741],[585,3,0.0741],[611,3,0.9012],[593,3,0.1802],[625,3,0.2253],[650,5,0.05407],[405,1.5,0.03932],[436,1.5,0.08738],[546,1.5,0.09611],[578,1.5,0.04806]],"TL835":[[450,21,0.0758],[543,3.5,0.7969],[487,3,0.07969],[585,3,0.07969],[620,3,0.06375],[611,3,0.7764],[593,3,0.1553],[625,3,0.1941],[650,5,0.04659],[405,1.5,0.04522],[436,1.5,0.1005],[546,1.5,0.1105],[578,1.5,0.05527]],"U35":[[450,21,0.0758],[543,3.5,0.7969],[487,3,0.07969],[585,3,0.07969],[620,3,0.06375],[611,3,0.7764],[593,3,0.1553],[625,3,0.1941],[650,5,0.04659],[405,1.5,0.04522],[436,1.5,0.1005],[546,1.5,0.1105],[578,1.5,0.05527]],"TL930":[[450,20,0.1746],[525,28,0.2906],[590,28,0.399],[630,25,0.3994],[405,1.5,0.03769],[436,1.5,0.08375],[546,1.5,0.09212],[578,1.5,0.04606]],"LEDB1":[[452,8,0.2678],[555,48,0.4252],[625,28,0.6546]],"LEDB2":[[452,8,0.3704],[555,48,0.4538],[625,28,0.5627]],"LEDB3":[[452,8,0.7144],[555,48,0.5159],[625,28,0.3596]],"LEDB4":[[452,8,1.022],[555,48,0.5504],[625,28,0.2429]],"LEDB5":[[452,8,1.392],[555,48,0.5794],[625,28,0.1416]],"LEDBH1":[[452,8,0.3334],[545,50,0.4328],[630,38,0.6571]],"LED935":[[452,8,0.5128],[545,50,0.4779],[630,38,0.5448]],"L30_8":[[452,8,0.3704],[555,48,0.4538],[625,28,0.5627]],"L40_8":[[452,8,0.7144],[555,48,0.5159],[625,28,0.3596]],"L31_9":[[452,8,0.3689],[545,50,0.4431],[630,38,0.6316]],"LEDLCW":[[452,8,0.7472],[555,48,0.5202],[625,28,0.3451]],"LDT8G":[[452,8,0.7144],[555,48,0.5159],[625,28,0.3596]],"LEDNGT":[[452,8,0.2124],[555,48,0.6747],[625,28,1.623]],"LEDV1":[[410,8,0.2455],[450,18,0.3915],[530,32,0.5964],[625,30,0.7537]],"LEDV2":[[410,8,0.2602],[450,18,0.5643],[530,32,0.6368],[625,30,0.66]],"RGB1":[[460,10,0.5285],[525,14,0.5195],[630,9,0.8849]]};
+  const gsum = list => l => { let s = 0; for (const [c, w, a] of list) { const t = (l - c) / w; if (t * t < 50) s += a * Math.exp(-0.5 * t * t); } return s; };
+  const SRC = {};
+  const add = (key, base, suf, cat, f) => { SRC[key] = {base, suf, cat, f}; };
+  const alias = (key, base, suf, to) => { SRC[key] = {base, suf, cat: null, f: SRC[to].f}; };
+  add('D65', 'D65', '', 'Daylight', daylight(6504)); add('D75', 'D75', '', 'Daylight', daylight(7504));
+  add('D55', 'D55', '', 'Daylight', daylight(5503)); add('D50', 'D50', '', 'Daylight', daylight(5003));
+  add('C', 'C', '', 'Daylight', daylight(6774));
+  add('A', 'A', '', 'Incandescent', planck(2848)); add('HOR', 'HOR', '', 'Incandescent', planck(2300));
+  const fl = (key, ck, suf, cat) => add(key, key, suf || '', cat || 'Fluorescent', gsum(COMPS[ck]));
+  fl('F01', 'F1'); fl('F02', 'F2', ' (CWF)'); fl('F03', 'F3'); fl('F04', 'F4'); fl('F05', 'F5'); fl('F06', 'F6');
+  fl('F07', 'F7', ' (DLF)'); fl('F08', 'F8'); fl('F09', 'F9'); fl('F10', 'F10', '(TPL5)'); fl('F11', 'F11', '(TPL4)'); fl('F12', 'F12', '(TPL3)');
+  fl('TL83', 'TL83'); fl('TL84', 'TL84'); fl('TL835', 'TL835'); fl('TL930', 'TL930');
+  fl('U30', 'U30'); fl('U30X', 'U30X'); fl('U35', 'U35');
+  ['LDT8G','LEDB1','LEDB2','LEDB3','LEDB4','LEDB5','LEDBH1','RGB1','LEDV1','LEDV2','LED935','LEDNGT','L30_8','L40_8','L31_9','LEDLCW'].forEach(key => fl(key, key, '', 'LED'));
+  alias('HORSPL', 'HOR', ' SPL', 'HOR'); alias('D65SPL', 'D65', ' SPL', 'D65'); alias('D75SPL', 'D75', ' SPL', 'D75'); alias('SPL835', 'SPL835', '', 'TL835');
+  // option order as in the instrument's list: [keys, true = all -10 then all -02 / false = -10,-02 pairs]
+  const ORDER = [
+    [['D65','A','F02','F07','D75','F11','D55','D50','C','U30','TL84','HOR'], true],
+    [['F01','F03','F04','F05','F06','F08','F09','F10','F12'], true],
+    [['HORSPL','D65SPL','D75SPL','TL83','TL835','TL930','U35','U30X','LDT8G'], false],
+    [['LEDB1','LEDB2','LEDB3','LEDB4','LEDB5','LEDBH1','RGB1','LEDV1','LEDV2'], true],
+    [['LED935','LEDNGT','L30_8','L40_8','L31_9','LEDLCW','SPL835'], false]];
+  const srcName = (key, o) => `${SRC[key].base}-${o}${SRC[key].suf}`;
+  const baseKey = key => Object.keys(SRC).find(q => SRC[q].f === SRC[key].f && SRC[q].cat) || key;
+
+  let STEP = 10, N, WL, W, k, WHITE, stripRGB, illumKey = 'D65', obs = '02';
+  const D65_WHITE = [95.047, 100, 108.883];
+  const BRAD = [[0.8951,0.2664,-0.1614],[-0.7502,1.7135,0.0367],[0.0389,-0.0685,1.0296]];
+  const BRADI = [[0.9869929,-0.1470543,0.1599627],[0.4323053,0.5183603,0.0492912],[-0.0085287,0.0400428,0.9684867]];
+  const mul = (M, v) => M.map(r => r[0]*v[0] + r[1]*v[1] + r[2]*v[2]);
+  function adaptToD65(xyz) { // Bradford adaptation from the current illuminant white to D65 for sRGB display
+    const s = mul(BRAD, WHITE), d = mul(BRAD, D65_WHITE), c = mul(BRAD, xyz);
+    return mul(BRADI, c.map((v, i) => v * d[i] / s[i]));
+  }
+  function buildGrid() {
+    N = 300 / STEP + 1; WL = Array.from({length: N}, (_, i) => 400 + i * STEP);
+    const S = SRC[illumKey].f, cmf = cmfFor(obs);
+    W = WL.map(l => { // illuminant averaged over each bin's bandpass so narrow lines land in the right bin
+      let s = 0; for (let j = 0; j < STEP; j++) s += S(l - STEP / 2 + j + 0.5);
+      s /= STEP; const c = cmf(l); return [c[0] * s, c[1] * s, c[2] * s];
+    });
+    k = 100 / W.reduce((s, w) => s + w[1], 0);
+    WHITE = W.reduce((s, w) => [s[0] + w[0] * k, s[1] + w[1] * k, s[2] + w[2] * k], [0, 0, 0]);
+    stripRGB = WL.map(l => xyzToRGB([xb(l) * 90, yb(l) * 90, zb(l) * 90], true));
+  }
+
+  const toXYZ = R => R.reduce((s, r, i) => [s[0] + r * W[i][0] * k, s[1] + r * W[i][1] * k, s[2] + r * W[i][2] * k], [0, 0, 0]);
+  const f = t => t > 216/24389 ? Math.cbrt(t) : (24389/27 * t + 16) / 116;
+  const fi = t => t ** 3 > 216/24389 ? t ** 3 : (116 * t - 16) / (24389/27);
+  const xyzToLab = ([X, Y, Z]) => {
+    const fx = f(X / WHITE[0]), fy = f(Y / WHITE[1]), fz = f(Z / WHITE[2]);
+    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+  };
+  const toLab = R => xyzToLab(toXYZ(R));
+  const labToXYZ = ([L, a, b]) => { const fy = (L + 16) / 116; return [fi(fy + a / 500) * WHITE[0], fi(fy) * WHITE[1], fi(fy - b / 200) * WHITE[2]]; };
+  const gam = c => { c = Math.min(1, Math.max(0, c)); return c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1/2.4) - 0.055; };
+  function xyzToRGB(xyz, noAdapt) {
+    let [X, Y, Z] = noAdapt ? xyz : adaptToD65(xyz);
+    X /= 100; Y /= 100; Z /= 100;
+    return [3.2406*X - 1.5372*Y - 0.4986*Z, -0.9689*X + 1.8758*Y + 0.0415*Z, 0.0557*X - 0.2040*Y + 1.0570*Z].map(c => Math.round(gam(c) * 255));
+  }
+  const hex = rgb => '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+
+  // CIEDE2000 (Sharma et al. 2005)
+  function deltaE00(l1, l2) {
+    const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+    const [L1, a1, b1] = l1, [L2, a2, b2] = l2;
+    const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2), Cm = (C1 + C2) / 2;
+    const G = 0.5 * (1 - Math.sqrt(Cm ** 7 / (Cm ** 7 + 25 ** 7)));
+    const ap1 = (1 + G) * a1, ap2 = (1 + G) * a2;
+    const Cp1 = Math.hypot(ap1, b1), Cp2 = Math.hypot(ap2, b2);
+    const hp = (b, a) => (b === 0 && a === 0) ? 0 : (deg(Math.atan2(b, a)) + 360) % 360;
+    const h1 = hp(b1, ap1), h2 = hp(b2, ap2);
+    const dL = L2 - L1, dC = Cp2 - Cp1;
+    let dh = 0;
+    if (Cp1 * Cp2 !== 0) { dh = h2 - h1; if (dh > 180) dh -= 360; else if (dh < -180) dh += 360; }
+    const dH = 2 * Math.sqrt(Cp1 * Cp2) * Math.sin(rad(dh / 2));
+    const Lm = (L1 + L2) / 2, Cpm = (Cp1 + Cp2) / 2;
+    let hm = h1 + h2;
+    if (Cp1 * Cp2 === 0) hm = h1 + h2;
+    else if (Math.abs(h1 - h2) <= 180) hm /= 2;
+    else hm = (h1 + h2 < 360) ? (hm + 360) / 2 : (hm - 360) / 2;
+    const T = 1 - 0.17 * Math.cos(rad(hm - 30)) + 0.24 * Math.cos(rad(2 * hm)) + 0.32 * Math.cos(rad(3 * hm + 6)) - 0.20 * Math.cos(rad(4 * hm - 63));
+    const dTh = 30 * Math.exp(-(((hm - 275) / 25) ** 2));
+    const Rc = 2 * Math.sqrt(Cpm ** 7 / (Cpm ** 7 + 25 ** 7));
+    const Sl = 1 + 0.015 * (Lm - 50) ** 2 / Math.sqrt(20 + (Lm - 50) ** 2);
+    const Sc = 1 + 0.045 * Cpm, Sh = 1 + 0.015 * Cpm * T;
+    const Rt = -Math.sin(rad(2 * dTh)) * Rc;
+    return Math.sqrt((dL / Sl) ** 2 + (dC / Sc) ** 2 + (dH / Sh) ** 2 + Rt * (dC / Sc) * (dH / Sh));
+  }
+
+  const deltaEab = (l1, l2) => Math.hypot(l2[0] - l1[0], l2[1] - l1[1], l2[2] - l1[2]);
+  // CMC l:c (BS 6923), l1 = reference/standard
+  function deltaECMC(l1, l2, l = 2, c = 1) {
+    const [L1, a1, b1] = l1, [L2, a2, b2] = l2;
+    const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2);
+    let h1 = Math.atan2(b1, a1) * 180 / Math.PI; if (h1 < 0) h1 += 360;
+    const dL = L1 - L2, dC = C1 - C2, dH2 = Math.max(0, (a1 - a2) ** 2 + (b1 - b2) ** 2 - dC ** 2);
+    const F = Math.sqrt(C1 ** 4 / (C1 ** 4 + 1900)), rad = d => d * Math.PI / 180;
+    const T = h1 >= 164 && h1 <= 345 ? 0.56 + Math.abs(0.2 * Math.cos(rad(h1 + 168))) : 0.36 + Math.abs(0.4 * Math.cos(rad(h1 + 35)));
+    const SL = L1 < 16 ? 0.511 : 0.040975 * L1 / (1 + 0.01765 * L1);
+    const SC = 0.0638 * C1 / (1 + 0.0131 * C1) + 0.638, SH = SC * (F * T + 1 - F);
+    return Math.sqrt((dL / (l * SL)) ** 2 + (dC / (c * SC)) ** 2 + dH2 / SH ** 2);
+  }
+
+  // ---------- State ----------
+  const clamp01 = v => Math.min(1, Math.max(0, v));
+  buildGrid();
+  let R = new Array(N).fill(0.5);
+  let refR = null; // reference spectrum: keeps its colour consistent when the illuminant changes
+  const history = [];
+  const pushHistory = () => { history.push({step: STEP, R: R.slice()}); if (history.length > 50) history.shift(); };
+  const resample = (arr, oldWL) => WL.map(l => { // linear interpolation onto the current grid
+    const x = Math.min(oldWL.length - 1, Math.max(0, (l - oldWL[0]) / (oldWL[1] - oldWL[0])));
+    const i = Math.min(oldWL.length - 2, Math.floor(x));
+    return arr[i] + (arr[i + 1] - arr[i]) * (x - i);
+  });
+
+  // ---------- Lab -> spectrum (Gauss-Newton on a smooth cosine basis) ----------
+  const BASIS = 6;
+  const fromCoeffs = c => WL.map((_, i) => {
+    const t = i / (N - 1);
+    let v = c[0];
+    for (let j = 1; j < BASIS; j++) v += c[j] * Math.cos(Math.PI * j * t);
+    return clamp01(v);
+  });
+  function solveLinear(A, b) { // Gaussian elimination, small systems
+    const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+    for (let i = 0; i < n; i++) {
+      let p = i; for (let r = i + 1; r < n; r++) if (Math.abs(M[r][i]) > Math.abs(M[p][i])) p = r;
+      [M[i], M[p]] = [M[p], M[i]];
+      for (let r = i + 1; r < n; r++) { const m = M[r][i] / (M[i][i] || 1e-12); for (let c = i; c <= n; c++) M[r][c] -= m * M[i][c]; }
+    }
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) { let s = M[i][n]; for (let c = i + 1; c < n; c++) s -= M[i][c] * x[c]; x[i] = s / (M[i][i] || 1e-12); }
+    return x;
+  }
+  function labToSpectrum(target) {
+    const Yt = fi((target[0] + 16) / 116);
+    const c = new Array(BASIS).fill(0); c[0] = Yt;
+    const lam = 0.05; // Levenberg-Marquardt damping keeps the solution smooth/stable
+    for (let it = 0; it < 40; it++) {
+      const lab0 = toLab(fromCoeffs(c));
+      const err = target.map((t, i) => t - lab0[i]);
+      if (Math.hypot(...err) < 0.05) break;
+      const J = [[], [], []]; // J[row Lab][col coeff]
+      for (let j = 0; j < BASIS; j++) {
+        const cc = c.slice(); cc[j] += 0.01;
+        const lab1 = toLab(fromCoeffs(cc));
+        for (let r = 0; r < 3; r++) J[r][j] = (lab1[r] - lab0[r]) / 0.01;
+      }
+      const A = Array.from({length: BASIS}, (_, a) => Array.from({length: BASIS}, (_, b) => J[0][a]*J[0][b] + J[1][a]*J[1][b] + J[2][a]*J[2][b] + (a === b ? lam * (1 + a * a) : 0)));
+      const rhs = Array.from({length: BASIS}, (_, a) => J[0][a]*err[0] + J[1][a]*err[1] + J[2][a]*err[2]);
+      const d = solveLinear(A, rhs);
+      for (let j = 0; j < BASIS; j++) c[j] += d[j] * 0.8;
+    }
+    return fromCoeffs(c);
+  }
+
+  // ---------- Presets ----------
+  const sig = (l, c, w) => 1 / (1 + Math.exp(-(l - c) / w));
+  const gauss = (l, c, w) => Math.exp(-0.5 * ((l - c) / w) ** 2);
+  const PRESETS = {
+    'Red Paint':  l => 0.04 + 0.84 * sig(l, 600, 12),
+    'Leaf Green': l => 0.05 + 0.12 * gauss(l, 545, 28) + 0.45 * sig(l, 715, 14),
+    'Cobalt Blue': l => 0.06 + 0.55 * gauss(l, 455, 32) + 0.12 * sig(l, 690, 10),
+    '50% Grey':   () => 0.5,
+  };
+
+  // ---------- UI refs ----------
+  const $ = id => document.getElementById(id);
+  const sL = $('sL'), sa = $('sa'), sb = $('sb');
+  const cv = $('plot'), ctx = cv.getContext('2d');
+  const PAD = {l: 46, r: 14, t: 14, b: 50};
+  const pw = () => cv.width - PAD.l - PAD.r, ph = () => cv.height - PAD.t - PAD.b;
+  const xOf = i => PAD.l + i / (N - 1) * pw();
+  const yOf = v => PAD.t + (1 - v) * ph();
+  const fmt = v => v.toFixed(1).replace('.', ',');
+
+  // Polyline or Catmull-Rom spline (display only: colorimetry always uses the sampled points)
+  function curvePath(closed) {
+    const P = R.map((v, i) => [xOf(i), yOf(v)]), sp = $('spline').checked;
+    ctx.beginPath();
+    if (closed) { ctx.moveTo(P[0][0], yOf(0)); ctx.lineTo(P[0][0], P[0][1]); } else ctx.moveTo(P[0][0], P[0][1]);
+    for (let i = 0; i < N - 1; i++) {
+      if (!sp) { ctx.lineTo(P[i + 1][0], P[i + 1][1]); continue; }
+      const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(N - 1, i + 2)];
+      const cl = y => Math.min(yOf(0), Math.max(yOf(1), y));
+      ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, cl(p1[1] + (p2[1] - p0[1]) / 6), p2[0] - (p3[0] - p1[0]) / 6, cl(p2[1] - (p3[1] - p1[1]) / 6), p2[0], p2[1]);
+    }
+    if (closed) { ctx.lineTo(P[N - 1][0], yOf(0)); ctx.closePath(); }
+  }
+
+  function draw(hover) {
+    const w = cv.width, h = cv.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '15px "Segoe UI", sans-serif';
+    ctx.textBaseline = 'middle';
+    // grid + y labels
+    ctx.lineWidth = 1;
+    for (let v = 0; v <= 10; v++) {
+      const y = Math.round(yOf(v / 10)) + .5;
+      ctx.strokeStyle = '#3c3c3c'; ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
+      ctx.fillStyle = '#8a8a8a'; ctx.textAlign = 'right'; ctx.fillText(fmt(v / 10), PAD.l - 8, y);
+    }
+    ctx.textAlign = 'center';
+    for (let i = 0; i < N; i++) {
+      const x = Math.round(xOf(i)) + .5;
+      ctx.strokeStyle = '#3c3c3c'; ctx.beginPath(); ctx.moveTo(x, PAD.t); ctx.lineTo(x, PAD.t + ph()); ctx.stroke();
+      if (WL[i] % 20 === 0) {
+        ctx.save(); ctx.translate(x, PAD.t + ph() + 10); ctx.rotate(-Math.PI / 4);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#8a8a8a'; ctx.fillText(WL[i], 0, 0); ctx.restore();
+      }
+    }
+    // spectrum colour strip under the plot
+    for (let i = 0; i < N; i++) {
+      const x0 = i === 0 ? xOf(0) : (xOf(i) + xOf(i - 1)) / 2, x1 = i === N - 1 ? xOf(i) : (xOf(i) + xOf(i + 1)) / 2;
+      ctx.fillStyle = `rgb(${stripRGB[i].join(',')})`; ctx.fillRect(x0, h - 8, x1 - x0 + 1, 4);
+    }
+    // filled area
+    curvePath(true);
+    ctx.fillStyle = 'rgba(47,107,255,.14)'; ctx.fill();
+    // curve
+    curvePath(); ctx.strokeStyle = '#2f6bff'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.stroke();
+    // points
+    R.forEach((v, i) => {
+      ctx.beginPath(); ctx.arc(xOf(i), yOf(v), i === hover ? 6 : (N > 40 ? 3 : 4.5), 0, 7);
+      ctx.fillStyle = i === hover ? '#fff' : '#1a1a1a'; ctx.fill();
+      ctx.strokeStyle = '#2f6bff'; ctx.lineWidth = 2; ctx.stroke();
+    });
+    // tooltip
+    if (hover != null && hover >= 0) {
+      const t = `${WL[hover]} nm · ${R[hover].toFixed(3).replace('.', ',')}`;
+      ctx.font = '600 15px "Segoe UI", sans-serif';
+      const tw = ctx.measureText(t).width + 16;
+      let tx = Math.min(w - PAD.r - tw, Math.max(PAD.l, xOf(hover) - tw / 2));
+      let ty = yOf(R[hover]) - 36; if (ty < PAD.t) ty = yOf(R[hover]) + 14;
+      ctx.fillStyle = 'rgba(20,20,20,.92)'; ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(tx, ty, tw, 24, 5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(t, tx + 8, ty + 12.5);
+    }
+  }
+
+  let syncingSliders = false;
+  const refOnGrid = () => refR && resample(refR.R, refR.WL);
+  function updateColor(fromSliders) {
+    const xyz = toXYZ(R), lab = xyzToLab(xyz), rgb = xyzToRGB(xyz);
+    $('swatch').style.background = hex(rgb);
+    $('hex').textContent = hex(rgb).toUpperCase();
+    $('xyz').textContent = `XYZ ${xyz.map(v => v.toFixed(1)).join(' ')}`;
+    if (!fromSliders) {
+      syncingSliders = true;
+      sL.value = lab[0]; sa.value = lab[1]; sb.value = lab[2];
+      syncingSliders = false;
+    }
+    $('vL').textContent = Math.round(lab[0]);
+    $('va').textContent = Math.round(lab[1]);
+    $('vb').textContent = Math.round(lab[2]);
+    const rs = refOnGrid(); // reference is re-evaluated under the current illuminant
+    if (rs) {
+      const rx = toXYZ(rs), rl = xyzToLab(rx), de = deltaE00(rl, lab);
+      $('refSwatch').style.background = hex(xyzToRGB(rx));
+      $('deAb').textContent = deltaEab(rl, lab).toFixed(2);
+      $('deCmc').textContent = deltaECMC(rl, lab, 2, 1).toFixed(2);
+      $('de').textContent = de.toFixed(2);
+      $('deTxt').textContent = de < 1 ? 'imperceptible' : de < 2 ? 'barely perceptible' : de < 5 ? 'noticeable' : 'clearly different';
+    }
+  }
+  const refresh = (fromSliders, hover) => { draw(hover); updateColor(fromSliders); };
+
+  // ---------- Drawing with pointer ----------
+  let drawing = false, last = null, hoverIdx = -1;
+  function pos(e) {
+    const r = cv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * cv.width / r.width, py = (e.clientY - r.top) * cv.height / r.height;
+    let v = clamp01(1 - (py - PAD.t) / ph());
+    if ($('snap').checked) v = Math.round(v * 20) / 20;
+    return {x: Math.min(N - 1, Math.max(0, (px - PAD.l) / pw() * (N - 1))), v};
+  }
+  function paint(a, b) { // fill every bin between two samples so fast strokes leave no gaps
+    const i0 = Math.round(Math.min(a.x, b.x)), i1 = Math.round(Math.max(a.x, b.x));
+    for (let i = i0; i <= i1; i++) {
+      const t = b.x === a.x ? 1 : (i - a.x) / (b.x - a.x);
+      R[i] = a.x === b.x ? b.v : clamp01(a.v + (b.v - a.v) * Math.min(1, Math.max(0, t)));
+    }
+  }
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); pushHistory(); drawing = true;
+    last = pos(e); paint(last, last); hoverIdx = Math.round(last.x); refresh(false, hoverIdx);
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e); hoverIdx = Math.round(p.x);
+    if (drawing) { paint(last, p); last = p; refresh(false, hoverIdx); } else draw(hoverIdx);
+  });
+  const stop = () => { drawing = false; };
+  cv.addEventListener('pointerup', stop); cv.addEventListener('pointercancel', stop);
+  cv.addEventListener('pointerleave', () => { if (!drawing) { hoverIdx = -1; draw(); } });
+
+  // ---------- Controls ----------
+  const setSpectrum = arr => { pushHistory(); R = arr.map(clamp01); refresh(false); };
+  const onLab = () => {
+    if (syncingSliders) return;
+    $('vL').textContent = sL.value; $('va').textContent = sa.value; $('vb').textContent = sb.value;
+    R = labToSpectrum([+sL.value, +sa.value, +sb.value]);
+    refresh(true);
+  };
+  [sL, sa, sb].forEach(s => { s.addEventListener('pointerdown', pushHistory); s.addEventListener('input', onLab); });
+
+  Object.entries(PRESETS).forEach(([name, fn]) => {
+    const b = document.createElement('button'); b.textContent = name;
+    b.onclick = () => setSpectrum(WL.map(fn));
+    $('presets').appendChild(b);
+  });
+  $('undo').onclick = () => {
+    const h = history.pop(); if (!h) return;
+    if (h.step !== STEP) { STEP = h.step; $('step').value = STEP; buildGrid(); }
+    R = h.R; refresh(false);
+  };
+  $('reset').onclick = () => setSpectrum(new Array(N).fill(0.5));
+  $('smooth').onclick = () => setSpectrum(R.map((v, i) => (R[Math.max(0, i - 1)] + 2 * v + R[Math.min(N - 1, i + 1)]) / 4));
+  $('csv').onclick = () => {
+    const csv = 'wavelength_nm,reflectance\n' + WL.map((l, i) => `${l},${R[i].toFixed(4)}`).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'})); a.download = 'spectrum.csv'; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  // Reference colour
+  const setRef = () => { refR = {WL: WL.slice(), R: R.slice()}; refresh(false); };
+  $('setRef').onclick = setRef;
+  $('useRef').onclick = () => { if (refR) setSpectrum(refOnGrid()); };
+
+  // Illuminant & wavelength step
+  function buildIllumSelect() {
+    const sel = $('illum'); sel.innerHTML = '';
+    const grp = (label, entries) => {
+      const og = document.createElement('optgroup'); og.label = label;
+      entries.forEach(([key, o]) => { const op = document.createElement('option'); op.value = `${key}|${o}`; op.textContent = srcName(key, o); og.appendChild(op); });
+      sel.appendChild(og);
+    };
+    const OBS = ['10', '02'];
+    ORDER.forEach(([keys, blocks], i) => grp(`Group ${i + 1}`, blocks ? OBS.flatMap(o => keys.map(key => [key, o])) : keys.flatMap(key => OBS.map(o => [key, o]))));
+    const cust = Object.keys(SRC).filter(key => SRC[key].cat === 'Custom');
+    if (cust.length) grp('Imported', cust.flatMap(key => OBS.map(o => [key, o])));
+    sel.value = `${illumKey}|${obs}`;
+  }
+  buildIllumSelect();
+  $('illum').onchange = e => {
+    [illumKey, obs] = e.target.value.split('|'); buildGrid(); refresh(false);
+    const bk = baseKey(illumKey); if (!spSel.includes(bk)) spSel.push(bk);
+    spRebuild();
+  };
+  $('step').onchange = e => {
+    pushHistory(); const oldWL = WL.slice(); STEP = +e.target.value; buildGrid();
+    R = resample(R, oldWL); refresh(false);
+  };
+  $('spline').onchange = () => draw();
+
+  // CSV import (header optional; , ; tab separators; decimal comma; % or 0–1 values)
+  const parsePairs = text => text.split(/\r?\n/).map(l => {
+    const parts = /[;\t]/.test(l) ? l.split(/[;\t]/) : l.includes(',') && l.split(',').length === 2 ? l.split(',') : l.trim().split(/\s+/);
+    return parts.slice(0, 2).map(v => parseFloat(v.replace(',', '.')));
+  }).filter(p => p.length === 2 && p.every(Number.isFinite) && p[0] >= 300 && p[0] <= 1000).sort((a, b) => a[0] - b[0]);
+  const interpPts = pts => l => {
+    if (l <= pts[0][0]) return pts[0][1];
+    if (l >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+    const i = pts.findIndex(p => p[0] >= l), a = pts[i - 1], b = pts[i];
+    return a[1] + (b[1] - a[1]) * (l - a[0]) / (b[0] - a[0] || 1);
+  };
+  function importText(text) {
+    const pts = parsePairs(text);
+    if (pts.length < 2) { alert('No valid "wavelength, reflectance" rows found.'); return; }
+    const scale = Math.max(...pts.map(p => p[1])) > 1.5 ? 100 : 1, at = interpPts(pts);
+    setSpectrum(WL.map(l => at(l) / scale));
+  }
+  const readFile = file => file && file.text().then(importText);
+  $('import').onclick = () => $('file').click();
+  $('file').onchange = e => { readFile(e.target.files[0]); e.target.value = ''; };
+  const wrap = document.querySelector('.plot-wrap');
+  ['dragenter', 'dragover'].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); wrap.classList.add('drop'); }));
+  ['dragleave', 'drop'].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); wrap.classList.remove('drop'); }));
+  wrap.addEventListener('drop', e => readFile(e.dataTransfer.files[0]));
+
+  // ---------- Illuminant emission spectra ----------
+  const spCv = $('spdPlot'), sc = spCv.getContext('2d');
+  const SP = {l: 56, r: 16, t: 16, b: 48};
+  const spW = () => spCv.width - SP.l - SP.r, spH = () => spCv.height - SP.t - SP.b;
+  let spSel = [baseKey('D65'), 'F11', 'LEDB3', 'A'], spHover = null, spCurves = [], spYmax = 1;
+  const spColor = i => `hsl(${(i * 67 + 205) % 360} 85% 62%)`;
+  const spStrip = Array.from({length: 301}, (_, i) => xyzToRGB([xb(400 + i) * 90, yb(400 + i) * 90, zb(400 + i) * 90], true));
+  const spX = l => SP.l + (l - 400) / 300 * spW(), spY = v => SP.t + (1 - v / spYmax) * spH();
+  const spName = key => SRC[key].base + SRC[key].suf;
+
+  function sourceInfo(key) { // x, y, CCT (McCamy) from the SPD with the active observer
+    const f = SRC[key].f, cmf = cmfFor(obs); let X = 0, Y = 0, Z = 0;
+    for (let l = 400; l <= 700; l++) { const c = cmf(l), s = f(l); X += c[0] * s; Y += c[1] * s; Z += c[2] * s; }
+    const t = X + Y + Z, x = X / t, y = Y / t, n = (x - 0.3320) / (0.1858 - y);
+    return {x, y, cct: 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.33};
+  }
+  function spCompute() {
+    const mode = $('spNorm').value;
+    spCurves = spSel.map(key => {
+      const f = SRC[key].f, v = Array.from({length: 301}, (_, i) => f(400 + i));
+      const m = (mode === 'peak' ? Math.max(...v) : f(560)) || 1;
+      return {key, v: v.map(x => x / m)};
+    });
+    const mx = Math.max(1, ...spCurves.map(c => Math.max(...c.v)));
+    spYmax = mx <= 1.0001 ? 1 : Math.ceil(mx * 2) / 2;
+  }
+  function spDraw() {
+    const w = spCv.width, h = spCv.height;
+    sc.clearRect(0, 0, w, h); sc.font = '15px "Segoe UI", sans-serif'; sc.textBaseline = 'middle'; sc.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = Math.round(spY(spYmax * i / 5)) + .5;
+      sc.strokeStyle = '#3c3c3c'; sc.beginPath(); sc.moveTo(SP.l, y); sc.lineTo(w - SP.r, y); sc.stroke();
+      sc.fillStyle = '#8a8a8a'; sc.textAlign = 'right'; sc.fillText(fmt(spYmax * i / 5), SP.l - 8, y);
+    }
+    sc.textAlign = 'center';
+    for (let l = 400; l <= 700; l += 20) {
+      const x = Math.round(spX(l)) + .5;
+      sc.strokeStyle = '#3c3c3c'; sc.beginPath(); sc.moveTo(x, SP.t); sc.lineTo(x, SP.t + spH()); sc.stroke();
+      sc.fillStyle = '#8a8a8a'; sc.fillText(l, x, SP.t + spH() + 14);
+    }
+    spStrip.forEach((c, i) => { sc.fillStyle = `rgb(${c.join(',')})`; sc.fillRect(spX(400 + i) - .5, h - 10, 2, 5); });
+    const cur = baseKey(illumKey);
+    spCurves.forEach((c, ci) => {
+      sc.beginPath(); c.v.forEach((v, i) => i ? sc.lineTo(spX(400 + i), spY(v)) : sc.moveTo(spX(400), spY(v)));
+      sc.strokeStyle = spColor(ci); sc.lineWidth = c.key === cur ? 3.5 : 2; sc.lineJoin = 'round'; sc.stroke();
+    });
+    if (spHover != null) {
+      const x = Math.round(spX(spHover)) + .5;
+      sc.strokeStyle = '#aaa'; sc.lineWidth = 1; sc.setLineDash([4, 4]); sc.beginPath(); sc.moveTo(x, SP.t); sc.lineTo(x, SP.t + spH()); sc.stroke(); sc.setLineDash([]);
+      sc.fillStyle = '#fff'; sc.textAlign = 'left'; sc.fillText(`${spHover} nm`, Math.min(x + 6, w - 70), SP.t + 10);
+    }
+    spCurves.forEach((c, ci) => { const el = document.getElementById('spv' + ci); if (el) el.textContent = spHover != null ? c.v[spHover - 400].toFixed(3).replace('.', ',') : ''; });
+  }
+  function spRebuild() { // chips + legend + plot
+    const chips = $('chips'); chips.innerHTML = '';
+    const cats = {}; Object.keys(SRC).forEach(key => { const c = SRC[key].cat; if (c) (cats[c] = cats[c] || []).push(key); });
+    const cur = baseKey(illumKey);
+    Object.entries(cats).forEach(([cat, keys]) => {
+      const row = document.createElement('div'); row.className = 'chip-row'; row.innerHTML = `<span>${cat}</span>`;
+      keys.forEach(key => {
+        const b = document.createElement('button'); b.className = 'chip' + (key === cur ? ' cur' : ''); b.textContent = spName(key);
+        b.setAttribute('aria-pressed', spSel.includes(key)); b.title = key === cur ? 'Active illuminant' : '';
+        b.onclick = () => { spSel = spSel.includes(key) ? spSel.filter(q => q !== key) : [...spSel, key]; spRebuild(); };
+        row.appendChild(b);
+      });
+      chips.appendChild(row);
+    });
+    const lg = $('legend'); lg.innerHTML = '';
+    spSel.forEach((key, i) => {
+      const inf = sourceInfo(key), d = document.createElement('div'); d.className = 'lg';
+      d.innerHTML = `<i style="background:${spColor(i)}"></i><b>${spName(key)}</b><span class="val" id="spv${i}"></span><span class="xy">x ${inf.x.toFixed(4)} y ${inf.y.toFixed(4)} · ${Math.round(inf.cct)} K</span>`;
+      const u = document.createElement('button'); u.textContent = 'Use'; u.title = 'Use as illuminant';
+      u.onclick = () => { $('illum').value = `${key}|${obs}`; $('illum').onchange({target: $('illum')}); };
+      d.appendChild(u); lg.appendChild(d);
+    });
+    spCompute(); spDraw();
+  }
+  spCv.addEventListener('pointermove', e => {
+    const r = spCv.getBoundingClientRect(), px = (e.clientX - r.left) * spCv.width / r.width;
+    spHover = Math.round(Math.min(700, Math.max(400, 400 + (px - SP.l) / spW() * 300))); spDraw();
+  });
+  spCv.addEventListener('pointerleave', () => { spHover = null; spDraw(); });
+  $('spNorm').onchange = () => { spCompute(); spDraw(); };
+  $('spClear').onclick = () => { spSel = []; spRebuild(); };
+  $('spCur').onclick = () => { spSel = [baseKey(illumKey)]; spRebuild(); };
+  $('spImport').onclick = () => $('spdFile').click();
+  $('spdFile').onchange = e => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    file.text().then(text => {
+      const pts = parsePairs(text);
+      if (pts.length < 2) { alert('No valid "wavelength, power" rows found.'); return; }
+      const key = 'CUS' + Object.keys(SRC).filter(q => SRC[q].cat === 'Custom').length;
+      add(key, file.name.replace(/\.[^.]+$/, ''), '', 'Custom', interpPts(pts));
+      spSel.push(key); buildIllumSelect(); spRebuild();
+    });
+  };
+
+  window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); $('undo').click(); } });
+
+  // Start from the colour shown in the reference (L*76 a*7 b*5)
+  sL.value = 76; sa.value = 7; sb.value = 5;
+  onLab();
+  setRef();
+  spRebuild();
+})();
+</script>
+</body>
+</html>
